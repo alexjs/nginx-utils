@@ -118,7 +118,7 @@ while True:
                     #subprocess.call("/etc/init.d/nginx restart")
                     hasRestarted = True
                 else:
-                    print "Not changing, first iteration"                
+                    pass              
             else:
                 print "same"
             address[hostname + "old"] = address[hostname]
