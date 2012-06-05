@@ -5,7 +5,6 @@
 
 import socket
 import time
-import pprint
 import re
 import hashlib
 import os
@@ -36,12 +35,10 @@ def parse_file(file_name):
     __matches = re.findall(r"server.*:.* ", configContents)
     return __matches
 
-pp = pprint.PrettyPrinter(indent=4)
-
 # Default configs (may be overriden by script parameters)
 nginxInitScript = "/etc/init.d/nginx"
 nginxConfigDir = "/etc/nginx/sites-enabled"
-checkTime = float(3600)
+checkTime = 3600
 
 
 # Parse our args
@@ -53,7 +50,7 @@ parser.add_argument('-d', '--directory', nargs=1,
     help='Directory to grab configs from', 
     metavar='nginxConfigDir')
 parser.add_argument('-t', '--time', nargs=1,
-    type=float,
+    type=int,
     help='Seconds to wait between checks', 
     metavar='checkTime')
 parser.add_argument('-i', '--init-script', nargs=1,
@@ -92,7 +89,7 @@ if params.init_script:
 # Preset variables
 configHash = defaultdict()
 matches = []
-address = defaultdict(list)
+oldaddress = defaultdict(list)
 firstRun = True
 
 # Loop
@@ -110,9 +107,9 @@ while True:
     for nginxConfigFile in dirList:
         # Ignore hidden files
         if re.match('^\.', nginxConfigFile):
+            # Skipping, hidden file
             verboseprint("Skipping hidden file:", 
                     nginxConfigDir + nginxConfigFile)
-            # Skipping, hidden file
         else:
             # Get a full file path
             nginxConfigFilePath = nginxConfigDir + "/" + nginxConfigFile
@@ -125,7 +122,7 @@ while True:
                 if configHash[nginxConfigFile] != checksum:
                     verboseprint("New checksum detected for file", 
                             nginxConfigFilePath, 
-                            " - updating dict")
+                            "- updating dict")
                     matches = parse_file(nginxConfigFilePath)
                     # Update the dict to include the new file
                     configHash[nginxConfigFile] = checksum
@@ -134,7 +131,7 @@ while True:
                 matches += parse_file(nginxConfigFilePath)
                 verboseprint("New config file detected -", 
                         nginxConfigFilePath, 
-                        " - updating dict")
+                        "- updating dict")
                 # Update the dict to include the new file
                 configHash[nginxConfigFile] = checksum
 
@@ -144,9 +141,9 @@ while True:
         if hasRestarted == False:
             # Isolate the hostname
             hostname = re.sub(r'.* (.*):.* .*', r'\1', match)
-            # grab the address range, shove it in a dict
-            address[hostname] = socket.getaddrinfo(hostname, None)     
-            if address[hostname] != address[hostname + "old"]:
+            # grab the address range
+            addr = socket.getaddrinfo(hostname, None)     
+            if addr != oldaddress[hostname]:
                 verboseprint("Evaluating hostname", hostname)
                 if firstRun == False and dryRun == False:
                     verboseprint("Backend has changed IP. Bouncing nginx")
@@ -158,12 +155,10 @@ while True:
                         hasRestarted = True
                     else:
                         sys.stderr.write(
-                                "Nginx failed to restart.Loop continuing \n")
-                else:
-                    pass              
+                                "Nginx failed to restart. Loop continuing \n")
             else:
                 verboseprint("No change to hostname", hostname)
-            address[hostname + "old"] = address[hostname]
+            oldaddress[hostname] = addr
     firstRun = False
     verboseprint("Sleeping for " + str(checkTime) + " seconds")
     time.sleep(checkTime)
