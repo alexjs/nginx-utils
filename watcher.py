@@ -1,4 +1,8 @@
 #!/usr/bin/python
+'''A daemon which parses nginx configs, and
+    checks to see whether the IPs of any backend nodes have changed.
+'''
+
 import socket
 import time
 import pprint
@@ -7,6 +11,7 @@ import hashlib
 import os
 import argparse
 import sys
+import subprocess
 from collections import defaultdict
 
 
@@ -34,12 +39,12 @@ def parse_file(file_name):
 pp = pprint.PrettyPrinter(indent=4)
 
 # Default configs (may be overriden by script parameters)
+nginxInitScript = "/etc/init.d/nginx"
 nginxConfigDir = "/etc/nginx/sites-enabled"
 checkTime = float(3600)
 
 
 # Parse our args
-
 parser = argparse.ArgumentParser(prog='watcher.py',
     description='''A daemon which parses nginx configs, and
     checks to see whether the IPs of any backend nodes have changed.
@@ -51,21 +56,43 @@ parser.add_argument('-t', '--time', nargs=1,
     type=float,
     help='Seconds to wait between checks', 
     metavar='checkTime')
-
+parser.add_argument('-i', '--init-script', nargs=1,
+    type=str,
+    help='Location of init script (defaults to /etc/init.d/nginx)')
+parser.add_argument('-n', '--dry-run', action='store_true',
+    help='Whether to restart nginx or merely alert about it')
+parser.add_argument('-v', '--verbose', action='store_true',
+    help='Verbosity level')
 params = parser.parse_args()
+
+dryRun = params.dry_run
+verbose = params.verbose
+
+if verbose:
+    def verboseprint(*args):
+        ''' Print each argument separately so caller doesn't need to
+        stuff everything to be printed into a single string '''
+        for arg in args:
+            print arg,
+        print
+else:   
+    verboseprint = lambda *a: None  
 
 if params.directory:
     nginxConfigDir = params.directory[0]
-
+    verboseprint("Using directory " + nginxConfigDir)
 if params.time:
     checkTime = params.time[0]
+    verboseprint("Using time interval " + str(checkTime))
+if params.init_script:
+    nginxInitScript = params.init_script[0]
+    verboseprint("Using init script " + nginxInitScript)
 
 # Main
-
 # Preset variables
 configHash = defaultdict()
 matches = []
-address =  defaultdict(list)
+address = defaultdict(list)
 firstRun = True
 
 # Loop
@@ -83,8 +110,9 @@ while True:
     for nginxConfigFile in dirList:
         # Ignore hidden files
         if re.match('^\.', nginxConfigFile):
-            #Skipping, hidden file
-            pass
+            verboseprint("Skipping hidden file:", 
+                    nginxConfigDir + nginxConfigFile)
+            # Skipping, hidden file
         else:
             # Get a full file path
             nginxConfigFilePath = nginxConfigDir + "/" + nginxConfigFile
@@ -95,12 +123,18 @@ while True:
             if configHash.has_key(nginxConfigFile):
                 # and if the hash we have doesn't match...
                 if configHash[nginxConfigFile] != checksum:
+                    verboseprint("New checksum detected for file", 
+                            nginxConfigFilePath, 
+                            " - updating dict")
                     matches = parse_file(nginxConfigFilePath)
                     # Update the dict to include the new file
                     configHash[nginxConfigFile] = checksum
             else:
                 # Parse the file for the first time
                 matches += parse_file(nginxConfigFilePath)
+                verboseprint("New config file detected -", 
+                        nginxConfigFilePath, 
+                        " - updating dict")
                 # Update the dict to include the new file
                 configHash[nginxConfigFile] = checksum
 
@@ -113,15 +147,23 @@ while True:
             # grab the address range, shove it in a dict
             address[hostname] = socket.getaddrinfo(hostname, None)     
             if address[hostname] != address[hostname + "old"]:
-                if firstRun == False:
-                    print "change"
-                    #subprocess.call("/etc/init.d/nginx restart")
-                    hasRestarted = True
+                verboseprint("Evaluating hostname", hostname)
+                if firstRun == False and dryRun == False:
+                    verboseprint("Backend has changed IP. Bouncing nginx")
+                    restart = subprocess.call([
+                        nginxInitScript, 
+                        "restart"])
+                    if restart == 0:
+                        verboseprint("Nginx restart returned with 0 exit code")
+                        hasRestarted = True
+                    else:
+                        sys.stderr.write(
+                                "Nginx failed to restart.Loop continuing \n")
                 else:
                     pass              
             else:
-                print "same"
+                verboseprint("No change to hostname", hostname)
             address[hostname + "old"] = address[hostname]
     firstRun = False
-    print "Sleeping for " + str(checkTime) + " seconds"
+    verboseprint("Sleeping for " + str(checkTime) + " seconds")
     time.sleep(checkTime)
