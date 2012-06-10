@@ -50,16 +50,16 @@ checkDisk() {
 }
 
 grabFiles() {
-    local fileList=$(find $1 -atime +$2)
+    local fileList=$(find ${1} -atime +${2})
     echo ${fileList}
 }
 
 pruneFiles() {
     local pruneDir=${1}
     local pruneAge=${2}
-    fileList=$(grabFiles $pruneDir $pruneAge)
+    fileList=$(grabFiles ${pruneDir} ${pruneAge})
     for file in ${fileList} ; do 
-        ${ioNiceExec} rm $file
+        ${ioNiceExec} rm ${file}
     done
 }
 
