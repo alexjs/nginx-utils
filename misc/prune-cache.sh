@@ -17,11 +17,11 @@
 
 
 # Config Vars
-pruneDir="/Volumes/ramdisk/cache"
+pruneDir=""
 pruneAge="30"
 minPruneAge="7"
 maxDisk="95"
-alertEmail="alex@alexsmith.org"
+alertEmail=""
 
 # Config Consts
 HOSTNAME=$(hostname)
