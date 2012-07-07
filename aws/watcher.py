@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python -u
 '''A daemon which parses nginx configs, and
     checks to see whether the IPs of any backend nodes have changed.
 '''
@@ -35,11 +35,11 @@ def parse_file(file_name):
     __matches = re.findall(r"server.*:.* ", configContents)
     return __matches
 
-def ordered_addrs(host_name):
+def orderedAddrs(hostname):
     ''' Return an order list of IP addresses from the stuff you get
     back from socket.getaddrinfo remove dupes and sort '''
-    orderedAddrList = []
-    addrList =  socket.getaddrinfo(host_name, None)
+    orderedAddrList=[]
+    addrList =  socket.getaddrinfo(hostname, None)
     for i in range(len(addrList)):
         if addrList[i][4][0] not in orderedAddrList:
             orderedAddrList.append(addrList[i][4][0])
@@ -153,7 +153,7 @@ while True:
             # Isolate the hostname
             hostname = re.sub(r'.* (.*):.* .*', r'\1', match)
             # grab the address range
-            addr = ordered_addrs(hostname)     
+            addr = orderedAddrs(hostname)     
             if addr != oldaddress[hostname]:
                 verboseprint("Evaluating hostname", hostname)
                 if firstRun == False and dryRun == False:
